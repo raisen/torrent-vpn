@@ -1,0 +1,74 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc libc6-dev libgl1-mesa-dev xorg-dev
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('gui/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      working-directory: gui
+      run: make deps
+
+    - name: Run tests
+      working-directory: gui
+      run: make test
+
+    - name: Lint code
+      working-directory: gui
+      run: make lint
+
+    - name: Build application
+      working-directory: gui
+      run: make build
+
+    - name: Generate icon
+      working-directory: gui
+      run: make icon
+
+    - name: Show version info
+      working-directory: gui
+      run: make version
+
+    - name: Verify build works
+      working-directory: gui
+      run: |
+        echo "Build completed successfully for ${{ matrix.os }}"
+        ls -la build/ || dir build\

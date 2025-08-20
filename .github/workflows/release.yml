@@ -1,0 +1,238 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  GO_VERSION: '1.21'
+
+jobs:
+  build:
+    name: Build for ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          # macOS builds
+          - platform: darwin-amd64
+            runner: macos-latest
+            make_target: build-mac-intel
+            package_target: package-darwin
+            archive_name: TorrentVPNManager-darwin-amd64.tar.gz
+          - platform: darwin-arm64
+            runner: macos-latest
+            make_target: build-mac-arm
+            package_target: package-darwin
+            archive_name: TorrentVPNManager-darwin-arm64.tar.gz
+          
+          # Windows builds
+          - platform: windows-amd64
+            runner: windows-latest
+            make_target: build-windows
+            package_target: package-windows
+            archive_name: TorrentVPNManager-windows-amd64.zip
+          
+          # Linux builds
+          - platform: linux-amd64
+            runner: ubuntu-latest
+            make_target: build-linux
+            package_target: package-linux
+            archive_name: TorrentVPNManager-linux-amd64.tar.gz
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('gui/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    # Install platform-specific dependencies
+    - name: Install Linux dependencies
+      if: contains(matrix.platform, 'linux')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc libc6-dev libgl1-mesa-dev xorg-dev
+
+    # Build using Makefile
+    - name: Build application
+      working-directory: gui
+      run: make ${{ matrix.make_target }}
+
+    # Generate icon and package using Makefile
+    - name: Generate icon
+      working-directory: gui
+      run: make icon
+
+    - name: Package application
+      working-directory: gui
+      run: make ${{ matrix.package_target }}
+
+    # Create archives for release
+    - name: Create macOS archive
+      working-directory: gui
+      if: contains(matrix.platform, 'darwin')
+      run: |
+        tar -czf ${{ matrix.archive_name }} -C dist TorrentVPNManager.app
+
+    - name: Create Windows archive
+      working-directory: gui
+      if: contains(matrix.platform, 'windows')
+      run: |
+        cd dist
+        powershell Compress-Archive -Path torrent-vpn-manager -DestinationPath ../${{ matrix.archive_name }}
+
+    - name: Create Linux archive
+      working-directory: gui
+      if: contains(matrix.platform, 'linux')
+      run: |
+        tar -czf ${{ matrix.archive_name }} -C dist torrent-vpn-manager
+
+    # Upload artifacts
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.platform }}
+        path: gui/${{ matrix.archive_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ./artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -la ./artifacts/
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Torrent VPN Manager ${{ github.ref_name }}
+        body: |
+          ## What's New in ${{ github.ref_name }}
+          
+          ### Download Instructions
+          
+          **macOS:**
+          - Download `TorrentVPNManager-darwin-amd64.tar.gz` (Intel Macs)
+          - Download `TorrentVPNManager-darwin-arm64.tar.gz` (Apple Silicon Macs)
+          - Extract and move the .app to your Applications folder
+          
+          **Windows:**
+          - Download `TorrentVPNManager-windows-amd64.zip`
+          - Extract and run the executable
+          
+          **Linux:**
+          - Download `TorrentVPNManager-linux-amd64.tar.gz`
+          - Extract and run the executable
+          
+          ### Prerequisites
+          - Docker and Docker Compose installed
+          - Private Internet Access (PIA) VPN account
+          
+          ### Setup
+          1. Copy `docker-compose.example.yml` to `docker-compose.yml`
+          2. Edit the file with your PIA credentials
+          3. Run the application
+          
+          For detailed instructions, see the [README](https://github.com/raisen/torrent-vpn/blob/main/README.md).
+        draft: false
+        prerelease: false
+
+    # Upload release assets
+    - name: Upload macOS Intel Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/TorrentVPNManager-darwin-amd64/TorrentVPNManager-darwin-amd64.tar.gz
+        asset_name: TorrentVPNManager-darwin-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload macOS Intel Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/darwin-amd64/TorrentVPNManager-darwin-amd64.tar.gz
+        asset_name: TorrentVPNManager-darwin-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload macOS ARM Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/darwin-arm64/TorrentVPNManager-darwin-arm64.tar.gz
+        asset_name: TorrentVPNManager-darwin-arm64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/windows-amd64/TorrentVPNManager-windows-amd64.zip
+        asset_name: TorrentVPNManager-windows-amd64.zip
+        asset_content_type: application/zip
+
+    - name: Upload Linux Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/linux-amd64/TorrentVPNManager-linux-amd64.tar.gz
+        asset_name: TorrentVPNManager-linux-amd64.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/TorrentVPNManager-windows-amd64/TorrentVPNManager-windows-amd64.zip
+        asset_name: TorrentVPNManager-windows-amd64.zip
+        asset_content_type: application/zip
+
+    - name: Upload Linux Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/TorrentVPNManager-linux-amd64/TorrentVPNManager-linux-amd64.tar.gz
+        asset_name: TorrentVPNManager-linux-amd64.tar.gz
+        asset_content_type: application/gzip
