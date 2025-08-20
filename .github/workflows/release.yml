@@ -16,29 +16,25 @@ jobs:
     strategy:
       matrix:
         include:
-          # macOS builds
+          # macOS builds - native compilation
           - platform: darwin-amd64
-            runner: macos-latest
-            make_target: build-mac-intel
+            runner: macos-13  # Intel runner
             package_target: package-darwin
             archive_name: TorrentVPNManager-darwin-amd64.tar.gz
           - platform: darwin-arm64
-            runner: macos-latest
-            make_target: build-mac-arm
+            runner: macos-latest  # ARM runner
             package_target: package-darwin
             archive_name: TorrentVPNManager-darwin-arm64.tar.gz
           
-          # Windows builds
+          # Windows builds - native compilation
           - platform: windows-amd64
             runner: windows-latest
-            make_target: build-windows
             package_target: package-windows
             archive_name: TorrentVPNManager-windows-amd64.zip
           
-          # Linux builds
+          # Linux builds - native compilation
           - platform: linux-amd64
             runner: ubuntu-latest
-            make_target: build-linux
             package_target: package-linux
             archive_name: TorrentVPNManager-linux-amd64.tar.gz
 
@@ -57,7 +53,7 @@ jobs:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('gui/go.sum') }}
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
 
@@ -68,10 +64,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gcc libc6-dev libgl1-mesa-dev xorg-dev
 
-    # Build using Makefile
+    # Build using Makefile (native compilation for each platform)
     - name: Build application
       working-directory: gui
-      run: make ${{ matrix.make_target }}
+      run: make build
 
     # Generate icon and package using Makefile
     - name: Generate icon
@@ -87,20 +83,32 @@ jobs:
       working-directory: gui
       if: contains(matrix.platform, 'darwin')
       run: |
+        # For macOS, the package target creates the .app bundle in dist/
         tar -czf ${{ matrix.archive_name }} -C dist TorrentVPNManager.app
 
     - name: Create Windows archive
       working-directory: gui
       if: contains(matrix.platform, 'windows')
       run: |
+        # For Windows, create a distribution folder with the .exe
+        mkdir -p dist/TorrentVPNManager
+        cp build/torrent-vpn-manager.exe dist/TorrentVPNManager/TorrentVPNManager.exe
+        cp ../README.md dist/TorrentVPNManager/
+        cp ../docker-compose.example.yml dist/TorrentVPNManager/
         cd dist
-        powershell Compress-Archive -Path torrent-vpn-manager -DestinationPath ../${{ matrix.archive_name }}
+        powershell Compress-Archive -Path TorrentVPNManager -DestinationPath ../${{ matrix.archive_name }}
 
     - name: Create Linux archive
       working-directory: gui
       if: contains(matrix.platform, 'linux')
       run: |
-        tar -czf ${{ matrix.archive_name }} -C dist torrent-vpn-manager
+        # For Linux, create a distribution folder with the binary
+        mkdir -p dist/TorrentVPNManager
+        cp build/torrent-vpn-manager dist/TorrentVPNManager/TorrentVPNManager
+        chmod +x dist/TorrentVPNManager/TorrentVPNManager
+        cp ../README.md dist/TorrentVPNManager/
+        cp ../docker-compose.example.yml dist/TorrentVPNManager/
+        tar -czf ${{ matrix.archive_name }} -C dist TorrentVPNManager
 
     # Upload artifacts
     - name: Upload artifacts
