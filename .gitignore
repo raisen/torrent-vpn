@@ -1,0 +1,108 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+torrent-vpn-manager
+
+# Generated GUI assets
+gui/assets/icon.png
+gui/build/
+gui/dist/
+
+# Generated application bundles and packages
+*.app/
+gui/*.app/
+gui/**/*.app/
+*.icns
+gui/**/*.icns
+*.dmg
+*.deb
+*.rpm
+*.msi
+*.pkg
+
+# Python cache files (from qBittorrent)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker volumes and application data
+.jackett/
+qbittorrent/
+jellyfin/
+gluetun_data/
+
+# Configuration files that might contain sensitive data
+*.env
+.env.*
+!.env.example
+docker-compose.yml
+!docker-compose.example.yml
+
+# Logs
+*.log
+logs/
+
+# Downloaded content (torrents, media files)
+downloads/
+*/downloads/
+torrents/
+*/torrents/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node.js (if you have any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build directories
+build/
+dist/
+
+# Coverage reports
+coverage/
+*.cover
+
+# Local development scripts that shouldn't be shared
+local-*
+dev-*
+test-*
+
+# Backup files
+*.bak
+*.backup

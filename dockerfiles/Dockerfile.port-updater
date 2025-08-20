@@ -1,0 +1,10 @@
+FROM alpine:latest
+
+# Install dependencies at build time
+RUN apk add --no-cache curl
+
+# Copy the port updater script
+COPY scripts/port-updater.sh /app/port-updater.sh
+RUN chmod +x /app/port-updater.sh
+
+ENTRYPOINT ["/app/port-updater.sh"]

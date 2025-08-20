@@ -1,0 +1,10 @@
+FROM alpine:latest
+
+# Install dependencies at build time
+RUN apk add --no-cache curl jq
+
+# Copy the streaming optimizer script
+COPY scripts/streaming-optimizer.sh /app/streaming-optimizer.sh
+RUN chmod +x /app/streaming-optimizer.sh
+
+ENTRYPOINT ["/app/streaming-optimizer.sh"]

@@ -1,0 +1,113 @@
+services:
+
+  gluetun:
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=YOUR_PIA_USERNAME_HERE
+      - OPENVPN_PASSWORD=YOUR_PIA_PASSWORD_HERE
+      - SERVER_REGIONS=Netherlands
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port
+      - FIREWALL=off
+      - DOT=off
+      - HTTPPROXY=on
+      - HTTPPROXY_LOG=on
+    image: "qmcgaw/gluetun"
+    volumes:
+      - gluetun_data:/tmp/gluetun  # Share gluetun data with other containers
+    ports:
+      - "5001:5000"  # Changed to 5001 to avoid conflict with macOS AirPlay
+      - "8888:8888/tcp" # HTTP proxy
+      - "8388:8388/tcp" # Shadowsocks
+      - "8388:8388/udp" # Shadowsocks
+      - "8080:8080"  # qBittorrent web interface
+    restart: unless-stopped
+
+  qbittorrent:
+    network_mode: "service:gluetun"
+    image: "linuxserver/qbittorrent:latest"
+    platform: linux/amd64  # Force AMD64 platform for Apple Silicon compatibility
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=8080
+    volumes:
+      - ./qbittorrent:/config
+      - /path/to/your/downloads:/downloads  # Update this path
+      - /path/to/your/downloads/completed:/downloads/completed  # Update this path
+      - /path/to/your/downloads/incomplete:/downloads/incomplete  # Update this path
+      - gluetun_data:/tmp/gluetun:ro  # Read-only access to gluetun forwarded port
+    depends_on:
+      - gluetun
+
+  qbit-password-setter:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.password-setter
+    network_mode: "service:gluetun"
+    volumes:
+      - gluetun_data:/tmp/gluetun  # Share the volume to create signal files
+    depends_on:
+      - qbittorrent
+    restart: "no"
+
+  qbit-port-updater:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.port-updater
+    network_mode: "service:gluetun"
+    volumes:
+      - gluetun_data:/tmp/gluetun:ro  # Share the same volume as gluetun
+    depends_on:
+      - qbit-password-setter
+    restart: unless-stopped
+
+  jellyfin:
+    image: "jellyfin/jellyfin:latest"
+    platform: linux/amd64  # Force AMD64 platform for Apple Silicon compatibility
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./jellyfin:/config
+      - /path/to/your/downloads:/media  # Update this path
+      - /path/to/your/downloads/completed:/media/completed  # Update this path
+      - /path/to/your/downloads/incomplete:/media/incomplete  # Update this path
+    ports:
+      - "8096:8096"  # Jellyfin web interface
+    restart: unless-stopped
+
+  # Service to automatically enable sequential download for video files
+  qbit-streaming-optimizer:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.streaming-optimizer
+    network_mode: "service:gluetun"
+    volumes:
+      - gluetun_data:/tmp/gluetun:ro  # Share the volume to check for signal files
+    depends_on:
+      - qbit-password-setter
+    restart: unless-stopped
+
+# Caddy reverse proxy - commented out for local development
+  # caddy:
+  #   links:
+  #     - gluetun
+  #     - jackett
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - .caddy:/data/
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   image: "caddy:latest"
+
+volumes:
+  gluetun_data:  # Shared volume for gluetun data (forwarded port, IP, etc.)
