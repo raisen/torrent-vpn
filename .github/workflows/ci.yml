@@ -67,8 +67,16 @@ jobs:
       working-directory: gui
       run: make version
 
-    - name: Verify build works
+    - name: Verify build works (Unix)
       working-directory: gui
+      if: matrix.os != 'windows-latest'
       run: |
         echo "Build completed successfully for ${{ matrix.os }}"
-        ls -la build/ || dir build\
+        ls -la build/
+
+    - name: Verify build works (Windows)
+      working-directory: gui
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "Build completed successfully for ${{ matrix.os }}"
+        dir build\
